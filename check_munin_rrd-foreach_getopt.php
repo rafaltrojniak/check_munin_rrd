@@ -47,7 +47,6 @@
 				return 1;
 				break;
 		}
-		$val=NULL;
 	}
 
 	if(!$file )
