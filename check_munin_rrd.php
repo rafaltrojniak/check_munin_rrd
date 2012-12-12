@@ -91,5 +91,3 @@
 
 	echo "OK: All RRD checks passed.\n";
 	return $STATE_OK;
-
-?>
