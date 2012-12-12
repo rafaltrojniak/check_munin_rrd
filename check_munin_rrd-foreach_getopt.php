@@ -1,12 +1,5 @@
 #!/usr/bin/php
 <?php
-	$options = getopt("hf:t:n:");
-	
-	if(!in_array('f', array_keys($options)))
-	{
-		echo "No file specified.\n";
-		return 1;
-	}
 
 	$STATE_OK=0;
 	$STATE_WARNING=1;
@@ -15,7 +8,7 @@
 
 	function usage()
 	{
-		echo "Usage: check_munin_rrd.php <options>\n";
+		echo "Usage: ".$argv[0]." <options>\n";
 		echo "Check Munin RRD databases\n";
 		echo "Options:\n";
 		echo "-f file name (required)\n";
@@ -25,66 +18,24 @@
 		echo "                                                            z - which database (3600 - hourly, etc.)\n";
 		echo "                                                            name - name of database (AVERAGE, MIN, MAX...)\n";
 		echo "-h shows this help message\n";
-		echo "Example: check_munin_rrd.php -f test.rrd -t 300:600 -n 0:3:3600";
+		echo "Example: ".$argv[0]." -f test.rrd -t 300:600 -n 0:3:3600";
 	}
 
+	$options = getopt("hf:t:n:");
 	foreach($options as $option=>$val)
 	{
 		switch($option)
 		{
 			case 'f':
-				exec("rrdtool dump ".escapeshellarg($val), $dump);
-				$rrdxml = simplexml_load_string(implode('', $dump));
-				if($rrdxml == FALSE)
-				{
-					echo "UNKNOWN: Could not load XML\n";
-					return $STATE_UNKNOWN;
-				}
+				$file = $val;
 				break;
 
 			case 't':
 				$times = explode(':', $val);
-				if((time() - $rrdxml->lastupdate) > $times[1])
-				{
-					echo "CRITICAL: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
-					return $STATE_CRITICAL;
-				}
-				if((time() - $rrdxml->lastupdate) > $times[0])
-				{
-					echo "WARNING: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
-					return $STATE_WARNING;
-				}
 				break;
 
 			case 'n':
 				$report_nans = explode(':', $val);
-				$rracount = count($rrdxml->rra);
-				for($i = 0; $i < $rracount; $i++)
-				{
-					if($rrdxml->rra[$i]->pdp_per_row == $report_nans[2]/$rrdxml->step)
-					{
-						if($rrdxml->rra[$i]->cf == $report_nans[3])
-						{
-							$rowcount = count($rrdxml->rra[$i]->database->row)-1;
-							for($j = 0; $j <= $report_nans[1]; $j++)
-							{
-								if($rrdxml->rra[$i]->database->row[$rowcount - $j]->v == "NaN")
-								{
-									if($j <= $report_nans[0])
-									{
-										echo "CRITICAL: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
-										return $STATE_CRITICAL;
-									}
-									if($j <= $report_nans[1])
-									{
-										echo "WARNING: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
-										return $STATE_WARNING;
-									}
-								}
-							}
-						}
-					}
-				}
 				break;
 
 			case 'h':
@@ -96,9 +47,66 @@
 				return 1;
 				break;
 		}
+		$val=NULL;
 	}
 
+	if(!$file )
+	{
+		echo "No file name specified.\n";
+		return 1;
+	}
+
+	exec("rrdtool dump ".escapeshellarg($file), $dump);
+	$rrdxml = simplexml_load_string(implode('', $dump));
+	if($rrdxml == FALSE)
+	{
+		echo "UNKNOWN: Could not parse XML\n";
+		return $STATE_UNKNOWN;
+	}
+
+	if(isset($times))
+	{
+		if((time() - $rrdxml->lastupdate) > $times[1])
+		{
+			echo "CRITICAL: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
+			return $STATE_CRITICAL;
+		}
+		if((time() - $rrdxml->lastupdate) > $times[0])
+		{
+			echo "WARNING: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
+			return $STATE_WARNING;
+		}
+	}
+
+	if(isset($report_nans))
+	{
+		$rracount = count($rrdxml->rra);
+		for($i = 0; $i < $rracount; $i++)
+		{
+			if($rrdxml->rra[$i]->pdp_per_row == $report_nans[2]/$rrdxml->step)
+			{
+				if($rrdxml->rra[$i]->cf == $report_nans[3])
+				{
+					$rowcount = count($rrdxml->rra[$i]->database->row)-1;
+					for($j = 0; $j <= $report_nans[1]; $j++)
+					{
+						if($rrdxml->rra[$i]->database->row[$rowcount - $j]->v == "NaN")
+						{
+							if($j <= $report_nans[0])
+							{
+								echo "CRITICAL: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
+								return $STATE_CRITICAL;
+							}
+							if($j <= $report_nans[1])
+							{
+								echo "WARNING: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
+									return $STATE_WARNING;
+							}
+						}
+					}
+				}
+			}		
+		}
+	}
 	echo "OK: All RRD checks passed.\n";
 	return $STATE_OK;
-
-?>
