@@ -1,7 +1,12 @@
 #!/usr/bin/php
 <?php
-	$options = getopt("hf:t:n::");
-	$nanlevel = "warn";
+	$options = getopt("hf:t:n:");
+	
+	if(!in_array('f', array_keys($options)))
+	{
+		echo "No file specified.\n";
+		return 1;
+	}
 
 	$STATE_OK=0;
 	$STATE_WARNING=1;
@@ -15,8 +20,12 @@
 		echo "Options:\n";
 		echo "-f file name (required)\n";
 		echo "-t x:y, if last update was more than x secs ago, WARN, if more than y, CRIT\n";
-		echo "-n [lvl] check for NaN values between correct entries, lvl can be warn or crit (defaults to warn)\n";
+		echo "-n x:y:z:name, check for NaN values at the end of database, if last NaN was less than x entries ago - CRIT\n";
+		echo "                                                            if less than y - WARN, 0 means last entry\n";
+		echo "                                                            z - which database (3600 - hourly, etc.)\n";
+		echo "                                                            name - name of database (AVERAGE, MIN, MAX...)\n";
 		echo "-h shows this help message\n";
+		echo "Example: check_munin_rrd.php -f test.rrd -t 300:600 -n 0:3:3600";
 	}
 
 	if(in_array('h', array_keys($options)))
@@ -24,18 +33,12 @@
 		usage();
 		return 0;
 	}
-	if(!in_array('f', array_keys($options)))
-	{
-		echo "No file specified.\n";
-		return 1;
-	}
 
-	exec("rrdtool dump ".$options['f']." > /tmp/".$options['f'].".tmp");
-
-	$rrdxml = simplexml_load_file("/tmp/".$options['f'].".tmp");
+	exec("rrdtool dump ".escapeshellarg($options['f']), $dump);
+	$rrdxml = simplexml_load_string(implode('', $dump));
 	if($rrdxml == FALSE)
 	{
-		echo "UNKNOWN: Could not load file\n";
+		echo "UNKNOWN: Could not load XML\n";
 		return $STATE_UNKNOWN;
 	}
 
@@ -52,40 +55,40 @@
 			echo "WARNING: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
 			return $STATE_WARNING;
 		}
+		break;
 	}
 	if(in_array('n', array_keys($options)))
 	{
-		if($options['n']) $nanlevel = $options['n'];
-		$nan_ok = false;
-		$nancount = 0;
+		$report_nans = explode(':', $options['n']);
 		$rracount = count($rrdxml->rra);
 		for($i = 0; $i < $rracount; $i++)
 		{
-			$rowcount = count($rrdxml->rra[$i]->database->row);
-			for($j = 0; $j < $rowcount; $j++)
+			if($rrdxml->rra[$i]->pdp_per_row == $report_nans[2]/$rrdxml->step)
 			{
-				if($rrdxml->rra[$i]->database->row[$j]->v == "NaN")
+				if($rrdxml->rra[$i]->cf == $report_nans[3])
 				{
-					if($j == 0) $nan_ok = true;
-					if(!$nan_ok) $nancount++;
+					$rowcount = count($rrdxml->rra[$i]->database->row)-1;
+					for($j = 0; $j <= $report_nans[1]; $j++)
+					{
+						if($rrdxml->rra[$i]->database->row[$rowcount - $j]->v == "NaN")
+						{
+							if($j <= $report_nans[0])
+							{
+								echo "CRITICAL: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
+								return $STATE_CRITICAL;
+							}
+							if($j <= $report_nans[1])
+							{
+								echo "WARNING: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
+								return $STATE_WARNING;
+							}
+						}
+					}
 				}
-				else $nan_ok = false;
-			}
-		}
-		if($nancount != 0)
-		{
-			if($nanlevel == "crit")
-			{
-				echo "CRITICAL: $nancount NaNs found.\n";
-				return $STATE_CRITICAL;
-			}
-			else
-			{
-				echo "WARNING: $nancount NaNs found.\n";
-				return $STATE_WARNING;
 			}
 		}
 	}
+
 	echo "OK: All RRD checks passed.\n";
 	return $STATE_OK;
 
