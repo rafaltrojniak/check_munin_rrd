@@ -29,15 +29,12 @@
 			case 'f':
 				$file = $val;
 				break;
-
 			case 't':
 				$times = explode(':', $val);
 				break;
-
 			case 'n':
 				$report_nans = explode(':', $val);
 				break;
-
 			case 'h':
 				usage();
 				return 0;
