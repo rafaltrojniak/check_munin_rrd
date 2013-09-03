@@ -55,7 +55,6 @@
 			echo "WARNING: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
 			return $STATE_WARNING;
 		}
-		break;
 	}
 	if(in_array('n', array_keys($options)))
 	{
