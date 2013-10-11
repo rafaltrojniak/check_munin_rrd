@@ -31,7 +31,7 @@
 	if(in_array('h', array_keys($options)))
 	{
 		usage();
-		return 0;
+		exit($STATE_UNKNOWN);
 	}
 
 	exec("rrdtool dump ".escapeshellarg($options['f']), $dump);
@@ -39,7 +39,7 @@
 	if($rrdxml == FALSE)
 	{
 		echo "UNKNOWN: Could not load XML\n";
-		return $STATE_UNKNOWN;
+		exit($STATE_UNKNOWN);
 	}
 
 	if(in_array('t', array_keys($options)))
@@ -48,12 +48,12 @@
 		if((time() - $rrdxml->lastupdate) > $times[1])
 		{
 			echo "CRITICAL: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
-			return $STATE_CRITICAL;
+			exit($STATE_CRITICAL);
 		}
 		if((time() - $rrdxml->lastupdate) > $times[0])
 		{
 			echo "WARNING: Last update was at ".date("D d-m-Y H:i:s O", (int)$rrdxml->lastupdate)."\n";
-			return $STATE_WARNING;
+			exit($STATE_WARNING);
 		}
 		break;
 	}
@@ -75,12 +75,12 @@
 							if($j <= $report_nans[0])
 							{
 								echo "CRITICAL: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
-								return $STATE_CRITICAL;
+								exit($STATE_CRITICAL);
 							}
 							if($j <= $report_nans[1])
 							{
 								echo "WARNING: NaN at $j in ".$rrdxml->rra[$i]->cf."\n";
-								return $STATE_WARNING;
+								exit($STATE_WARNING);
 							}
 						}
 					}
@@ -90,4 +90,4 @@
 	}
 
 	echo "OK: All RRD checks passed.\n";
-	return $STATE_OK;
+	exit($STATE_OK);
